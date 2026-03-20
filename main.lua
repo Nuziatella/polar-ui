@@ -1086,6 +1086,8 @@ local function ReinitializeModules()
     end
 end
 
+local HandleChatCommand
+
 local function OnCommunityChatMessage(...)
     HandleChatCommand(...)
 end
@@ -1094,7 +1096,7 @@ local function OnUiReloaded()
     ReinitializeModules()
 end
 
-local function HandleChatCommand(arg1, arg2, arg3, arg4, arg5)
+HandleChatCommand = function(arg1, arg2, arg3, arg4, arg5)
     local message = ""
     local senderName = ""
     local senderUnit = ""

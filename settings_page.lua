@@ -1,4 +1,16 @@
 local api = require("api")
+local Compat = nil
+do
+    local ok, mod = pcall(require, "polar-ui/compat")
+    if ok then
+        Compat = mod
+    else
+        ok, mod = pcall(require, "polar-ui.compat")
+        if ok then
+            Compat = mod
+        end
+    end
+end
 
 local SettingsPage = {
     settings = nil,
@@ -217,6 +229,19 @@ local function EnsureCooldownTrackerTables(s)
             s.cooldown_tracker.units[key].tracked_buffs = {}
         end
     end
+end
+
+local function SetWidgetEnabled(widget, enabled)
+    if widget == nil then
+        return
+    end
+    pcall(function()
+        if widget.Enable ~= nil then
+            widget:Enable(enabled and true or false)
+        elseif widget.SetEnabled ~= nil then
+            widget:SetEnabled(enabled and true or false)
+        end
+    end)
 end
 
 local function RefreshCooldownScanRows()
@@ -1392,10 +1417,16 @@ local function RefreshControls()
             SettingsPage.controls.plates_show_guild:SetChecked(s.nameplates.show_guild ~= false)
         end
         if SettingsPage.controls.plates_click_shift ~= nil then
-            SettingsPage.controls.plates_click_shift:SetChecked(s.nameplates.click_through_shift ~= false)
+            SettingsPage.controls.plates_click_shift:SetChecked(true)
+            SetWidgetEnabled(SettingsPage.controls.plates_click_shift, false)
         end
         if SettingsPage.controls.plates_click_ctrl ~= nil then
-            SettingsPage.controls.plates_click_ctrl:SetChecked(s.nameplates.click_through_ctrl ~= false)
+            SettingsPage.controls.plates_click_ctrl:SetChecked(true)
+            SetWidgetEnabled(SettingsPage.controls.plates_click_ctrl, false)
+        end
+        if SettingsPage.controls.plates_runtime_status ~= nil and SettingsPage.controls.plates_runtime_status.SetText ~= nil then
+            local runtimeText = Compat ~= nil and Compat.GetStatusText() or "Runtime OK"
+            SettingsPage.controls.plates_runtime_status:SetText(runtimeText)
         end
         if SettingsPage.controls.plates_alpha ~= nil then
             refreshSlider(SettingsPage.controls.plates_alpha, SettingsPage.controls.plates_alpha_val, tonumber(s.nameplates.alpha_pct) or 100)
@@ -1840,10 +1871,10 @@ local function ApplyControlsToSettings()
         s.nameplates.show_guild = SettingsPage.controls.plates_show_guild:GetChecked() and true or false
     end
     if SettingsPage.controls.plates_click_shift ~= nil then
-        s.nameplates.click_through_shift = SettingsPage.controls.plates_click_shift:GetChecked() and true or false
+        s.nameplates.click_through_shift = true
     end
     if SettingsPage.controls.plates_click_ctrl ~= nil then
-        s.nameplates.click_through_ctrl = SettingsPage.controls.plates_click_ctrl:GetChecked() and true or false
+        s.nameplates.click_through_ctrl = true
     end
     if SettingsPage.controls.plates_alpha ~= nil then
         s.nameplates.alpha_pct = GetSliderValue(SettingsPage.controls.plates_alpha)
@@ -3800,6 +3831,32 @@ local function EnsureWindow()
 
         SettingsPage.controls.plates_click_ctrl = CreateCheckbox("polarUiPlatesClickCtrl", page, "Ctrl: click through plates", 15, y)
         y = y + gap + 10
+
+        SettingsPage.controls.plates_runtime_note = CreateLabel(
+            "polarUiPlatesRuntimeNote",
+            page,
+            "Current client uses passthrough targeting. Keep stock nameplates roughly aligned behind the addon plates.",
+            15,
+            y,
+            13
+        )
+        if SettingsPage.controls.plates_runtime_note ~= nil then
+            SettingsPage.controls.plates_runtime_note:SetExtent(470, 36)
+        end
+        y = y + 38
+
+        SettingsPage.controls.plates_runtime_status = CreateLabel(
+            "polarUiPlatesRuntimeStatus",
+            page,
+            "",
+            15,
+            y,
+            12
+        )
+        if SettingsPage.controls.plates_runtime_status ~= nil then
+            SettingsPage.controls.plates_runtime_status:SetExtent(470, 32)
+        end
+        y = y + 34
 
         CreateLabel("polarUiPlatesLayoutHeader", page, "Layout", 15, y, 18)
         y = y + 30

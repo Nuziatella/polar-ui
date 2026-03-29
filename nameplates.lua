@@ -1,4 +1,28 @@
 local api = require("api")
+local Compat = nil
+local Runtime = nil
+do
+    local ok, mod = pcall(require, "polar-ui/compat")
+    if ok then
+        Compat = mod
+    else
+        ok, mod = pcall(require, "polar-ui.compat")
+        if ok then
+            Compat = mod
+        end
+    end
+end
+do
+    local ok, mod = pcall(require, "polar-ui/runtime")
+    if ok then
+        Runtime = mod
+    else
+        ok, mod = pcall(require, "polar-ui.runtime")
+        if ok then
+            Runtime = mod
+        end
+    end
+end
 
 local Nameplates = {
     settings = nil,
@@ -182,25 +206,6 @@ local function ShouldShowUnit(unit, cfg)
         return cfg.show_raid_party and true or false
     end
     return false
-end
-
-local function ChangeTarget(unit)
-    local tu = Nameplates.target_unitframe
-    if tu == nil or tu.eventWindow == nil or tu.eventWindow.OnClick == nil then
-        return
-    end
-
-    pcall(function()
-        tu.target = unit
-        tu.eventWindow:OnClick("LeftButton")
-        tu.target = "target"
-        if tu.ChangedTarget ~= nil then
-            tu:ChangedTarget()
-        end
-        if tu.UpdateAll ~= nil then
-            tu:UpdateAll()
-        end
-    end)
 end
 
 local function ApplyLayout(frame, cfg)
@@ -387,32 +392,18 @@ local function EnsureFrame(unit)
     pcall(function()
         eventWindow:AddAnchor("TOPLEFT", frame, 0, 0)
         eventWindow:AddAnchor("BOTTOMRIGHT", frame, 0, 0)
-        eventWindow:Show(true)
+        eventWindow:Show(false)
         eventWindow:EnableDrag(false)
+        if eventWindow.EnablePick ~= nil then
+            eventWindow:EnablePick(false)
+        end
     end)
-    frame.eventWindow = eventWindow
-
-    if eventWindow ~= nil and eventWindow.SetHandler ~= nil then
-        eventWindow:SetHandler("OnClick", function(_, button)
-            if button == "MiddleButton" then
-                return
-            end
-            if Nameplates.settings == nil then
-                return
-            end
-            local cfg = Nameplates.settings.nameplates
-            if type(cfg) ~= "table" then
-                return
-            end
-            if cfg.click_through_shift and api.Input ~= nil and api.Input.IsShiftKeyDown ~= nil and api.Input:IsShiftKeyDown() then
-                return
-            end
-            if cfg.click_through_ctrl and api.Input ~= nil and api.Input.IsControlKeyDown ~= nil and api.Input:IsControlKeyDown() then
-                return
-            end
-            ChangeTarget(unit)
+    if eventWindow.Clickable ~= nil then
+        pcall(function()
+            eventWindow:Clickable(false)
         end)
     end
+    frame.eventWindow = eventWindow
 
     Nameplates.frames[unit] = frame
     return frame
@@ -427,6 +418,10 @@ end
 
 local function UpdateOne(unit, settings)
     local cfg = GetCfg(settings)
+    if Compat ~= nil and not Compat.NameplatesSupported() then
+        SafeShow(Nameplates.frames[unit], false)
+        return
+    end
 
     local guildOnly = cfg.guild_only and true or false
 
@@ -533,7 +528,7 @@ local function UpdateOne(unit, settings)
         end)
     else
         SafeShow(frame.nameLabel, true)
-        SafeShow(frame.eventWindow, true)
+        SafeShow(frame.eventWindow, false)
 
         pcall(function()
             if frame.guildLabel ~= nil and frame.nameLabel ~= nil then
@@ -557,7 +552,7 @@ local function UpdateOne(unit, settings)
         isCharacter = (tostring(info.type) == "character")
     end
 
-    local name = api.Unit:GetUnitNameById(id)
+    local name = Runtime ~= nil and Runtime.GetUnitNameById(id) or ""
     SafeSetText(frame.nameLabel, name or "")
 
     local guild = nil
@@ -615,12 +610,13 @@ end
 
 Nameplates.Init = function(settings)
     Nameplates.settings = settings
+    if Compat ~= nil then
+        Compat.Probe(false)
+    end
     EnsureUnitKeys()
 
-    if ADDON ~= nil and ADDON.GetContent ~= nil and UIC ~= nil then
-        pcall(function()
-            Nameplates.target_unitframe = ADDON:GetContent(UIC.TARGET_UNITFRAME)
-        end)
+    if Runtime ~= nil and UIC ~= nil then
+        Nameplates.target_unitframe = Runtime.GetStockContent(UIC.TARGET_UNITFRAME)
     end
 end
 
@@ -635,6 +631,12 @@ end
 
 Nameplates.OnUpdate = function(settings)
     if settings == nil then
+        return
+    end
+    if Compat ~= nil and not Compat.NameplatesSupported() then
+        for _, frame in pairs(Nameplates.frames) do
+            SafeShow(frame, false)
+        end
         return
     end
 

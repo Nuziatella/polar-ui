@@ -2,6 +2,7 @@ local api = require("api")
 
 local SETTINGS_FILE_PATH = "polar-ui/settings.txt"
 local Nameplates = nil
+local Runtime = nil
 do
     local ok, mod = pcall(require, "polar-ui/nameplates")
     if ok then
@@ -10,6 +11,18 @@ do
         ok, mod = pcall(require, "polar-ui.nameplates")
         if ok then
             Nameplates = mod
+        end
+    end
+end
+
+do
+    local ok, mod = pcall(require, "polar-ui/runtime")
+    if ok then
+        Runtime = mod
+    else
+        ok, mod = pcall(require, "polar-ui.runtime")
+        if ok then
+            Runtime = mod
         end
     end
 end
@@ -483,14 +496,8 @@ local function HookUnitFrameDrag(wnd, settings, key)
 end
 
 local function GetStockContent(contentId)
-    if ADDON == nil or ADDON.GetContent == nil then
-        return nil
-    end
-    local ok, res = pcall(function()
-        return ADDON:GetContent(contentId)
-    end)
-    if ok then
-        return res
+    if Runtime ~= nil and Runtime.GetStockContent ~= nil then
+        return Runtime.GetStockContent(contentId)
     end
     return nil
 end

@@ -2,6 +2,8 @@ local api = require("api")
 
 local UI = nil
 local SettingsPage = nil
+local Compat = nil
+local Runtime = nil
 do
     local ok, mod = pcall(require, "polar-ui/ui")
     if ok then
@@ -12,6 +14,30 @@ do
             UI = mod
         end
 
+    end
+end
+
+do
+    local ok, mod = pcall(require, "polar-ui/compat")
+    if ok then
+        Compat = mod
+    else
+        ok, mod = pcall(require, "polar-ui.compat")
+        if ok then
+            Compat = mod
+        end
+    end
+end
+
+do
+    local ok, mod = pcall(require, "polar-ui/runtime")
+    if ok then
+        Runtime = mod
+    else
+        ok, mod = pcall(require, "polar-ui.runtime")
+        if ok then
+            Runtime = mod
+        end
     end
 end
 
@@ -33,7 +59,7 @@ end
 local PolarUiAddon = {
     name = "Polar UI",
     author = "Nuzi",
-    version = "0.9.1",
+    version = "0.9.3",
     desc = "Interface overhaul"
 }
 
@@ -1088,11 +1114,38 @@ end
 
 local HandleChatCommand
 
+local function LogRuntimeSummary()
+    if Compat == nil or api == nil or api.Log == nil or api.Log.Info == nil then
+        return
+    end
+    local runtime = Compat.Get()
+    local caps = runtime.caps or {}
+    api.Log:Info(string.format(
+        "[Polar-UI] Runtime nameplates=%s sliders=%s anchor=%s targeting=%s",
+        caps.nameplates_supported and "yes" or "no",
+        caps.slider_factory and "yes" or "no",
+        caps.nametag_anchor and "nametag" or (caps.screen_position and "screen" or "none"),
+        tostring(caps.targeting_mode or "unknown")
+    ))
+    for _, warning in ipairs(runtime.warnings or {}) do
+        api.Log:Info("[Polar-UI] " .. tostring(warning))
+    end
+    for _, blocker in ipairs(runtime.blockers or {}) do
+        if api.Log.Err ~= nil then
+            api.Log:Err("[Polar-UI] " .. tostring(blocker))
+        end
+    end
+end
+
 local function OnCommunityChatMessage(...)
     HandleChatCommand(...)
 end
 
 local function OnUiReloaded()
+    if Compat ~= nil then
+        Compat.Probe(true)
+        LogRuntimeSummary()
+    end
     ReinitializeModules()
 end
 
@@ -1132,15 +1185,7 @@ HandleChatCommand = function(arg1, arg2, arg3, arg4, arg5)
     if senderUnit == "player" then
         isLocalCommand = true
     else
-        local myName = ""
-        pcall(function()
-            if api ~= nil and api.Unit ~= nil and api.Unit.GetUnitId ~= nil and api.Unit.GetUnitNameById ~= nil then
-                local playerId = api.Unit:GetUnitId("player")
-                if playerId ~= nil then
-                    myName = tostring(api.Unit:GetUnitNameById(playerId) or "")
-                end
-            end
-        end)
+        local myName = Runtime ~= nil and Runtime.GetPlayerName() or ""
         if myName ~= "" and senderName == myName then
             isLocalCommand = true
         end
@@ -1211,6 +1256,10 @@ end
 
 local function OnLoad()
     EnsureSettings()
+    if Compat ~= nil then
+        Compat.Probe(true)
+        LogRuntimeSummary()
+    end
     ReinitializeModules()
 
     api.On("UPDATE", OnUpdate)
